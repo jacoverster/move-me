@@ -2,6 +2,8 @@
 
 **Move Me** is a cross-platform application that helps you take regular breaks by automatically showing a fullscreen overlay at configurable intervals. It includes manual override limits to ensure you maintain healthy work habits while accommodating real-world needs.
 
+**WARNING** This project is 99% vide-coded!
+
 ## Features
 
 ### Core Functionality
