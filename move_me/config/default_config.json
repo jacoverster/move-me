@@ -1,0 +1,21 @@
+{
+	"work_duration_minutes": 30,
+	"break_duration_minutes": 5,
+	"warning_time_seconds": 30,
+	"daily_override_limit": 3,
+	"notification_sound": true,
+	"log_level": "INFO",
+	"auto_start": false,
+	"auto_lock_enabled": true,
+	"state_file": "move_me_state.json",
+	"overlay_messages": [
+		"Ease your neck pain: Gently tilt your head side to side, holding for 10 seconds each way.",
+		"Step away and stretch: Slowly roll your shoulders backward in circles, 5 times to relieve neck tension.",
+		"Short break for productivity: Do chin tucks—pull chin back like a double chin, hold 5 seconds, repeat 5 times.",
+		"Prevent neck strain: Tilt head ear-to-shoulder gently, hold 15 seconds per side, breathe deeply.",
+		"Stand up and refresh: Look up and down slowly, 5 times each, to loosen your neck muscles.",
+		"Health over deadlines: Rotate head left and right gently, holding 10 seconds at each end.",
+		"Breaks for wellbeing: Shrug shoulders up to ears, hold 3 seconds, release, repeat 5 times.",
+		"Look far, blink, breathe: Gently massage your neck base with fingers in circular motions for 30 seconds."
+	]
+}
