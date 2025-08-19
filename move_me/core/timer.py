@@ -230,7 +230,8 @@ class TimerManager:
         self._break_end_time = datetime.now() + timedelta(minutes=break_duration)
 
         # Show break notification
-        self.notification_manager.show_break_starting(int(break_duration))
+        if self.config.get("verbose", False):
+            self.notification_manager.show_break_starting(int(break_duration))
 
         if self._on_break_start:
             self._on_break_start()
@@ -288,11 +289,12 @@ class TimerManager:
             daily_limit
         )
 
-        self.notification_manager.show_break_ending()
-        if remaining_overrides > 0:
-            self.notification_manager.show_status(
-                f"{remaining_overrides} overrides remaining today"
-            )
+        if self.config.get("verbose", False):
+            self.notification_manager.show_break_ending()
+            if remaining_overrides > 0:
+                self.notification_manager.show_status(
+                    f"{remaining_overrides} overrides remaining today"
+                )
 
         if self._on_break_end:
             self._on_break_end()
@@ -331,7 +333,9 @@ class TimerManager:
 
                 # Hide overlay and end break
                 try:
-                    self.screen_locker.hide_break_overlay()
+                    if self.overlay and self.overlay.is_active():
+                        self.overlay.hide_overlay()
+                        self.overlay = None
                 except Exception as e:
                     self.logger.error(f"Error hiding overlay after override: {e}")
 
