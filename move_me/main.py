@@ -27,11 +27,11 @@ def signal_handler(signum: int, frame) -> None:
 @app.command()
 def main(
     work_duration: Annotated[
-        Optional[int],
+        Optional[float],
         typer.Option("--work", "-w", help="Work duration in minutes before break"),
     ] = None,
     break_duration: Annotated[
-        Optional[int], typer.Option("--break", "-b", help="Break duration in minutes")
+        Optional[float], typer.Option("--break", "-b", help="Break duration in minutes")
     ] = None,
     override_limit: Annotated[
         Optional[int],

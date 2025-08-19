@@ -51,7 +51,7 @@ Move Me is a cross-platform break reminder tool built with Python 3.13+ that aut
 
 ### Config Hierarchy (highest precedence first)
 
-1. CLI arguments (`--work`, `--break`, `--overrides`)
+1. CLI arguments (`--work`, `--break`, `--overrides`) — `--work` and `--break` accept floats (e.g. `--work 0.1`)
 2. Custom config file (`--config path/to/config.yaml`)
 3. User config (`~/.config/move-me/config.json`)
 4. Default config (`move_me/config/default_config.json`)
@@ -66,8 +66,8 @@ Move Me is a cross-platform break reminder tool built with Python 3.13+ that aut
 ### Running & Testing
 
 ```bash
-# Development mode (short cycles for testing)
-uv run move-me main --work 1 --break 1 --dry-run --verbose
+# Development mode (short cycles for testing, supports floats)
+uv run move-me main --work 0.1 --break 0.1 --dry-run --verbose
 
 # Production-like test
 uv run move-me main --work 30 --break 5 --verbose

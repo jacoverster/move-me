@@ -2,7 +2,7 @@
 """Simple test script to show the Linux break overlay."""
 
 import time
-from move_me.platforms.linux_overlay import LinuxBreakOverlay
+from move_me.core.overlay import LinuxBreakOverlay
 
 
 def test_override():

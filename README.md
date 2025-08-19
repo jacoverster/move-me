@@ -79,8 +79,8 @@ uv run move-me status
 uv run move-me main [OPTIONS]
 
 Options:
-  --work, -w INTEGER       Work duration in minutes before break [default: 30]
-  --break, -b INTEGER      Break duration in minutes [default: 5]
+  --work, -w FLOAT         Work duration in minutes before break (supports decimals, e.g. 0.1) [default: 30]
+  --break, -b FLOAT        Break duration in minutes (supports decimals, e.g. 0.1) [default: 5]
   --overrides, -o INTEGER  Daily limit for manual overrides [default: 3]
   --config, -c PATH        Path to custom configuration file
   --no-sound              Disable notification sounds
@@ -114,9 +114,10 @@ Move Me automatically creates a configuration file at:
 
 ### Default Configuration
 ```json
-{
-  "work_duration_minutes": 30,
-  "break_duration_minutes": 5,
+
+# Custom durations (integer or float)
+uv run move-me main --work 60 --break 10
+uv run move-me main --work 0.1 --break 0.1
   "warning_time_seconds": 30,
   "daily_override_limit": 3,
   "notification_sound": true,

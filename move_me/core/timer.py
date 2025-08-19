@@ -7,7 +7,7 @@ from typing import Optional, Callable, Dict, Any
 
 from move_me.core.notifications import NotificationManager
 from move_me.core.state import StateManager
-from move_me.platforms.factory import get_screen_locker
+from move_me.core.overlay import LinuxBreakOverlay
 from move_me.utils.logger import get_logger
 
 
@@ -20,21 +20,21 @@ class TimerManager:
         self.notification_manager = NotificationManager(
             enable_sound=config.get("notification_sound", True)
         )
-        self.screen_locker = get_screen_locker()
+        self.overlay = None
         self.logger = get_logger()
 
         # Timer state
         self._running = False
         self._paused = False
-        self._current_task: Optional[asyncio.Task] = None
-        self._next_break_time: Optional[datetime] = None
-        self._break_end_time: Optional[datetime] = None
+        self._current_task = None
+        self._next_break_time = None
+        self._break_end_time = None
         self._in_break = False
 
         # Callbacks
-        self._on_break_start: Optional[Callable] = None
-        self._on_break_end: Optional[Callable] = None
-        self._on_override_used: Optional[Callable] = None
+        self._on_break_start = None
+        self._on_break_end = None
+        self._on_override_used = None
 
     def set_callbacks(
         self,
@@ -187,10 +187,10 @@ class TimerManager:
 
     def _schedule_next_break(self):
         """Schedule the next break."""
-        work_duration = self.config.get("work_duration_minutes", 45)
+        work_duration = float(self.config.get("work_duration_minutes", 45))
         self._next_break_time = datetime.now() + timedelta(minutes=work_duration)
         self.logger.info(
-            f"Next break scheduled for {self._next_break_time.strftime('%H:%M:%S')}"
+            f"Next break scheduled for {self._next_break_time.strftime('%H:%M:%S')} ({work_duration:.2f} min)"
         )
 
     async def _timer_loop(self):
@@ -226,11 +226,11 @@ class TimerManager:
         self.logger.info("Starting break")
         self._in_break = True
 
-        break_duration = self.config.get("break_duration_minutes", 5)
+        break_duration = float(self.config.get("break_duration_minutes", 5))
         self._break_end_time = datetime.now() + timedelta(minutes=break_duration)
 
         # Show break notification
-        self.notification_manager.show_break_starting(break_duration)
+        self.notification_manager.show_break_starting(int(break_duration))
 
         if self._on_break_start:
             self._on_break_start()
@@ -241,7 +241,6 @@ class TimerManager:
         # Show break overlay
         if self.config.get("auto_lock_enabled", True):
             try:
-                # Get overlay messages from config
                 overlay_messages = self.config.get(
                     "overlay_messages",
                     [
@@ -249,22 +248,13 @@ class TimerManager:
                         "Step away from the screen and stretch for a moment.",
                     ],
                 )
-
-                # Calculate break duration in seconds
-                break_duration_seconds = break_duration * 60
-
-                # Show overlay with override callback
-                success = self.screen_locker.show_break_overlay(
+                break_duration_seconds = int(break_duration * 60)
+                self.overlay = LinuxBreakOverlay(
                     messages=overlay_messages,
                     break_duration_seconds=break_duration_seconds,
                     on_override=self._handle_override,
                 )
-
-                if not success:
-                    self.logger.warning("Failed to show break overlay")
-                    self.notification_manager.show_error(
-                        "Could not show break overlay. Please take a manual break."
-                    )
+                self.overlay.show_overlay()
             except Exception as e:
                 self.logger.error(f"Error showing break overlay: {e}")
                 self.notification_manager.show_error(f"Break overlay error: {e}")
@@ -283,8 +273,9 @@ class TimerManager:
 
         # Hide the overlay if it's active
         try:
-            if self.screen_locker.is_overlay_active():
-                self.screen_locker.hide_break_overlay()
+            if self.overlay and self.overlay.is_active():
+                self.overlay.hide_overlay()
+                self.overlay = None
         except Exception as e:
             self.logger.error(f"Error hiding overlay at break end: {e}")
 
