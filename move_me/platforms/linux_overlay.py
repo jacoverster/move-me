@@ -103,8 +103,6 @@ class LinuxBreakOverlay:
         self.config = config or OverlayConfig()
         self.logger = get_logger()
 
-        self.root: Optional[tk.Tk] = None
-        self.overlay_thread: Optional[threading.Thread] = None
         self.is_showing = False
         self.start_time: Optional[datetime] = None
 
@@ -114,54 +112,34 @@ class LinuxBreakOverlay:
         self.override_button: Optional[tk.Button] = None
 
     def show_overlay(self):
-        """Show the break overlay."""
+        """Show the break overlay using singleton pattern for Tk instance."""
         if self.is_showing:
             return
 
         self.is_showing = True
         self.start_time = datetime.now()
 
-        # Run overlay in separate thread to avoid blocking
-        self.overlay_thread = threading.Thread(target=self._create_overlay)
-        self.overlay_thread.daemon = True
-        self.overlay_thread.start()
+        # Run overlay in the main thread by creating a new thread for mainloop
+        self._overlay_thread = threading.Thread(
+            target=self._run_overlay_thread, daemon=True
+        )
+        self._overlay_thread.start()
 
-    def hide_overlay(self):
-        """Hide the break overlay."""
-        if not self.is_showing:
-            return
-
-        self.is_showing = False
-
-        if self.root:
-            # Schedule the cleanup to happen in the GUI thread
-            try:
-                self.root.after(0, self._cleanup_overlay)
-            except tk.TclError:
-                # If that fails, try direct cleanup
-                self._cleanup_overlay()
-
-    def _cleanup_overlay(self):
-        """Clean up the overlay window."""
-        if self.root:
-            try:
-                self.root.quit()  # Exit the mainloop
-                self.root.destroy()  # Destroy the window
-            except tk.TclError:
-                pass  # Window might already be destroyed
-            finally:
-                self.root = None
-
-    def _create_overlay(self):
-        """Create and run the overlay GUI."""
+    def _run_overlay_thread(self):
+        """Run the overlay in a separate thread with its own Tk instance."""
         try:
-            self.root = tk.Tk()
-            self.root.title("Move Me - Break Time")
+            # Initialize quit flag
+            self._should_quit = False
+
+            # Create a new Tk instance for this thread
+            root = tk.Tk()
+            root.title("Move Me - Break Time")
+            root.configure(bg=self.config.COLORS["background"])
 
             # Get screen dimensions
-            self.root.update_idletasks()  # Ensure window is ready
-            screen_width = self.root.winfo_screenwidth()
-            screen_height = self.root.winfo_screenheight()
+            root.update_idletasks()  # Ensure window is ready
+            screen_width = root.winfo_screenwidth()
+            screen_height = root.winfo_screenheight()
 
             # Make window large enough to cover multiple monitors
             # Use a very large size that should cover most multi-monitor setups
@@ -169,172 +147,206 @@ class LinuxBreakOverlay:
             extended_height = screen_height * 2  # Cover up to 2 monitors vertically
 
             # Position at 0,0 to start from top-left corner
-            self.root.geometry(f"{extended_width}x{extended_height}+0+0")
-            self.root.configure(bg=self.config.COLORS["background"])
+            root.geometry(f"{extended_width}x{extended_height}+0+0")
 
             # Make window fullscreen and topmost
-            self.root.attributes("-fullscreen", True)
-            self.root.attributes("-topmost", True)
+            root.attributes("-fullscreen", True)
+            root.attributes("-topmost", True)
 
-            # Try Linux-specific attributes to prevent window manager interference
+            # Try Linux-specific attributes
             try:
-                self.root.attributes("-type", "splash")
+                root.attributes("-type", "splash")
             except tk.TclError:
-                pass  # Not all window managers support this
+                pass
 
-            # Disable window manager decorations
-            self.root.overrideredirect(True)
+            root.overrideredirect(True)
 
             # Focus and raise the window
-            self.root.focus_force()
-            self.root.lift()
-            self.root.tkraise()
-
-            # Center frame for content
-            center_frame = tk.Frame(self.root, bg=self.config.COLORS["background"])
-            center_frame.place(relx=0.5, rely=0.5, anchor="center")
-
-            # Create optimized fonts using the configuration
-            title_font = self.config.get_best_font(
-                "primary", self.config.FONT_SIZES["title"], "bold"
-            )
-            timer_font = self.config.get_best_font(
-                "monospace", self.config.FONT_SIZES["timer"], "bold"
-            )
-            button_font = self.config.get_best_font(
-                "primary", self.config.FONT_SIZES["button"], "normal"
-            )
-            warning_font = self.config.get_best_font(
-                "primary", self.config.FONT_SIZES["warning"], "normal"
-            )
-
-            # Create Font objects for better rendering control
-            self.title_font_obj = tkfont.Font(
-                family=title_font[0], size=title_font[1], weight=title_font[2]
-            )  # type: ignore
-            self.timer_font_obj = tkfont.Font(
-                family=timer_font[0], size=timer_font[1], weight=timer_font[2]
-            )  # type: ignore
-            self.button_font_obj = tkfont.Font(
-                family=button_font[0], size=button_font[1], weight=button_font[2]
-            )  # type: ignore
-            self.warning_font_obj = tkfont.Font(
-                family=warning_font[0], size=warning_font[1], weight=warning_font[2]
-            )  # type: ignore
-
-            # Random message with improved styling
-            message = random.choice(self.messages)
-            self.message_label = tk.Label(
-                center_frame,
-                text=message,
-                font=self.title_font_obj,
-                fg=self.config.COLORS["text_primary"],
-                bg=self.config.COLORS["background"],
-                wraplength=900,
-                justify="center",
-                bd=0,  # Remove border
-                highlightthickness=0,  # Remove highlight
-            )
-            self.message_label.pack(pady=30)
-
-            # Timer display with improved styling
-            self.timer_label = tk.Label(
-                center_frame,
-                text=self._format_time_remaining(),
-                font=self.timer_font_obj,
-                fg=self.config.COLORS["timer_active"],
-                bg=self.config.COLORS["background"],
-                bd=0,
-                highlightthickness=0,
-            )
-            self.timer_label.pack(pady=20)
-
-            # Override button with modern styling
-            self.override_button = tk.Button(
-                center_frame,
-                text="Override Break (Use Sparingly)",
-                font=self.button_font_obj,
-                bg=self.config.COLORS["button_bg"],
-                fg=self.config.COLORS["button_text"],
-                activebackground=self.config.COLORS["button_hover"],
-                activeforeground=self.config.COLORS["button_text"],
-                padx=30,
-                pady=15,
-                command=self._handle_override,
-                cursor="hand2",
-                relief="flat",
-                borderwidth=0,
-                bd=0,
-                highlightthickness=0,
-            )
-            self.override_button.pack(pady=40)
-
-            # Warning text with improved styling
-            warning_label = tk.Label(
-                center_frame,
-                text="This overlay will prevent interaction with your system until the break is complete.\n"
-                "Use the override button only when absolutely necessary.",
-                font=self.warning_font_obj,
-                fg=self.config.COLORS["text_secondary"],
-                bg=self.config.COLORS["background"],
-                justify="center",
-                wraplength=800,
-                bd=0,
-                highlightthickness=0,
-            )
-            warning_label.pack(pady=10)
-
-            # Update timer every second
-            self._update_timer()
-
-            # Capture all key events and mouse events more aggressively
-            self.root.bind("<Key>", self._block_input)
-            self.root.bind("<Button>", self._block_input)
-            self.root.bind("<Motion>", self._block_input)
-            self.root.bind("<ButtonPress>", self._block_input)
-            self.root.bind("<ButtonRelease>", self._block_input)
-            self.root.bind("<KeyPress>", self._block_input)
-            self.root.bind("<KeyRelease>", self._block_input)
-
-            # Grab keyboard and mouse input
-            self.root.grab_set_global()
-            self.root.focus_set()
-
-            # Try to grab the pointer and keyboard (Linux-specific)
-            try:
-                # This helps ensure the window captures all input
-                self.root.update()
-                if self.root:
-                    self.root.after(100, lambda: self.root and self.root.focus_force())
-            except Exception as e:
-                self.logger.warning(f"Could not grab input focus: {e}")
+            root.focus_force()
+            root.lift()
+            root.tkraise()
 
             # Protocol for window close (prevent closing)
-            self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
+            root.protocol("WM_DELETE_WINDOW", self._on_closing)
 
-            # Start the GUI event loop
-            self.root.mainloop()
+            # Capture all input events
+            root.bind("<Key>", self._block_input)
+            root.bind("<Button>", self._block_input)
+            root.bind("<Motion>", self._block_input)
+            root.bind("<ButtonPress>", self._block_input)
+            root.bind("<ButtonRelease>", self._block_input)
+            root.bind("<KeyPress>", self._block_input)
+            root.bind("<KeyRelease>", self._block_input)
+
+            # Grab keyboard and mouse input
+            root.grab_set_global()
+            root.focus_set()
+
+            # Store root reference
+            self._thread_root = root
+
+            # Populate the overlay
+            self._populate_overlay_in_thread(root)
+
+            # Start periodic check for quit signal
+            def check_quit():
+                if self._should_quit:
+                    root.quit()
+                else:
+                    root.after(100, check_quit)  # Check every 100ms
+
+            root.after(100, check_quit)
+
+            # Start the mainloop
+            root.mainloop()
 
         except Exception as e:
-            self.logger.error(f"Error creating overlay: {e}")
+            self.logger.error(f"Error in overlay thread: {e}")
         finally:
             self.is_showing = False
+            if hasattr(self, "_thread_root"):
+                try:
+                    self._thread_root.destroy()
+                except Exception:
+                    pass
+                delattr(self, "_thread_root")
 
-    def _update_timer(self):
-        """Update the timer display."""
-        if not self.is_showing or not self.root or not self.timer_label:
+    def _populate_overlay_in_thread(self, root):
+        """Populate the overlay with content (runs in overlay thread)."""
+        # Center frame for content
+        center_frame = tk.Frame(root, bg=self.config.COLORS["background"])
+        center_frame.place(relx=0.5, rely=0.5, anchor="center")
+
+        # Create optimized fonts using the configuration
+        title_font = self.config.get_best_font(
+            "primary", self.config.FONT_SIZES["title"], "bold"
+        )
+        timer_font = self.config.get_best_font(
+            "monospace", self.config.FONT_SIZES["timer"], "bold"
+        )
+        button_font = self.config.get_best_font(
+            "primary", self.config.FONT_SIZES["button"], "normal"
+        )
+        warning_font = self.config.get_best_font(
+            "primary", self.config.FONT_SIZES["warning"], "normal"
+        )
+
+        # Create Font objects - cast weight to str to avoid type issues
+        self.title_font_obj = tkfont.Font(
+            family=title_font[0],
+            size=title_font[1],
+            weight=str(title_font[2]),  # type: ignore
+        )
+        self.timer_font_obj = tkfont.Font(
+            family=timer_font[0],
+            size=timer_font[1],
+            weight=str(timer_font[2]),  # type: ignore
+        )
+        self.button_font_obj = tkfont.Font(
+            family=button_font[0],
+            size=button_font[1],
+            weight=str(button_font[2]),  # type: ignore
+        )
+        self.warning_font_obj = tkfont.Font(
+            family=warning_font[0],
+            size=warning_font[1],
+            weight=str(warning_font[2]),  # type: ignore
+        )
+
+        # Random message with improved styling
+        message = random.choice(self.messages)
+        self.message_label = tk.Label(
+            center_frame,
+            text=message,
+            font=self.title_font_obj,
+            fg=self.config.COLORS["text_primary"],
+            bg=self.config.COLORS["background"],
+            wraplength=900,
+            justify="center",
+            bd=0,
+            highlightthickness=0,
+        )
+        self.message_label.pack(pady=30)
+
+        # Timer display with improved styling
+        self.timer_label = tk.Label(
+            center_frame,
+            text=self._format_time_remaining(),
+            font=self.timer_font_obj,
+            fg=self.config.COLORS["timer_active"],
+            bg=self.config.COLORS["background"],
+            bd=0,
+            highlightthickness=0,
+        )
+        self.timer_label.pack(pady=20)
+
+        # Override button with modern styling
+        self.override_button = tk.Button(
+            center_frame,
+            text="Override Break (Use Sparingly)",
+            font=self.button_font_obj,
+            bg=self.config.COLORS["button_bg"],
+            fg=self.config.COLORS["button_text"],
+            activebackground=self.config.COLORS["button_hover"],
+            activeforeground=self.config.COLORS["button_text"],
+            padx=30,
+            pady=15,
+            command=self._handle_override_in_thread,
+            cursor="hand2",
+            relief="flat",
+            borderwidth=0,
+            bd=0,
+            highlightthickness=0,
+        )
+        self.override_button.pack(pady=40)
+
+        # Warning text with improved styling
+        warning_label = tk.Label(
+            center_frame,
+            text="This overlay will prevent interaction with your system until the break is complete.\n"
+            "Use the override button only when absolutely necessary.",
+            font=self.warning_font_obj,
+            fg=self.config.COLORS["text_secondary"],
+            bg=self.config.COLORS["background"],
+            justify="center",
+            wraplength=800,
+            bd=0,
+            highlightthickness=0,
+        )
+        warning_label.pack(pady=10)
+
+        # Start timer updates
+        self._update_timer_in_thread()
+
+    def _handle_override_in_thread(self):
+        """Handle override button click (runs in overlay thread)."""
+        override_successful = False
+
+        if self.on_override:
+            # Call the override callback and check if it was successful
+            result = self.on_override()
+            override_successful = result if result is not None else False
+
+        # Only hide the overlay if the override was successful
+        if override_successful:
+            self.is_showing = False
+            # Set flag to quit the overlay gracefully
+            self._should_quit = True
+        else:
+            # Override failed - keep overlay active
+            self.logger.info("Override was not successful, keeping overlay active")
+
+    def _update_timer_in_thread(self):
+        """Update the timer display (runs in overlay thread)."""
+        if not self.is_showing or not self.timer_label:
             return
 
         time_remaining = self._get_time_remaining()
 
         if time_remaining <= 0:
-            # Break time is over - but don't close overlay here!
-            # Let the timer system manage the overlay lifecycle
-            # Just update display to show 00:00
+            # Break time is over
             self.timer_label.config(text="00:00")
-            self.timer_label.config(
-                fg=self.config.COLORS["timer_complete"]
-            )  # Green color to indicate completion
+            self.timer_label.config(fg=self.config.COLORS["timer_complete"])
 
             # Update message to indicate break is complete
             if self.message_label:
@@ -343,14 +355,45 @@ class LinuxBreakOverlay:
                 )
 
             # Continue scheduling updates to keep the display responsive
-            self.root.after(1000, self._update_timer)
+            if hasattr(self, "_thread_root") and self._thread_root:
+                self._thread_root.after(1000, self._update_timer_in_thread)
             return
 
         # Update timer display
         self.timer_label.config(text=self._format_time_remaining())
 
         # Schedule next update
-        self.root.after(1000, self._update_timer)
+        if hasattr(self, "_thread_root") and self._thread_root:
+            self._thread_root.after(1000, self._update_timer_in_thread)
+
+    def _block_input(self, event):
+        """Block keyboard and mouse input."""
+        # Prevent all input except our override button
+        return "break"
+
+    def _on_closing(self):
+        """Handle window close event."""
+        # Don't allow closing the window
+        pass
+
+    def is_active(self) -> bool:
+        """Check if overlay is currently active."""
+        return self.is_showing
+
+    def hide_overlay(self):
+        """Hide the break overlay."""
+        if not self.is_showing:
+            return
+
+        self.is_showing = False
+
+        # Simply wait for the thread to finish naturally
+        if hasattr(self, "_overlay_thread") and self._overlay_thread.is_alive():
+            try:
+                # Set a flag to stop the overlay gracefully
+                self._should_quit = True
+            except Exception:
+                pass
 
     def _get_time_remaining(self) -> int:
         """Get remaining time in seconds."""
@@ -367,40 +410,3 @@ class LinuxBreakOverlay:
         minutes = seconds // 60
         seconds = seconds % 60
         return f"{minutes:02d}:{seconds:02d}"
-
-    def _handle_override(self):
-        """Handle override button click."""
-        override_successful = False
-
-        if self.on_override:
-            # Call the override callback and check if it was successful
-            # The callback should return True if override was used, False otherwise
-            result = self.on_override()
-            override_successful = result if result is not None else False
-
-        # Only close the overlay if the override was successful
-        if override_successful:
-            # Set flag to stop showing and exit the mainloop
-            self.is_showing = False
-
-            if self.root:
-                self.root.quit()  # Exit the mainloop
-                self.root.destroy()  # Destroy the window
-                self.root = None
-        else:
-            # Override failed - keep overlay active and optionally show feedback
-            self.logger.info("Override was not successful, keeping overlay active")
-
-    def _block_input(self, event):
-        """Block keyboard and mouse input."""
-        # Prevent all input except our override button
-        return "break"
-
-    def _on_closing(self):
-        """Handle window close event."""
-        # Don't allow closing the window
-        pass
-
-    def is_active(self) -> bool:
-        """Check if overlay is currently active."""
-        return self.is_showing
