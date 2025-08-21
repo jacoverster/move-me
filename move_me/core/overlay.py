@@ -17,7 +17,6 @@ Color and Design Improvements:
 """
 
 import random
-import threading
 import tkinter as tk
 import tkinter.font as tkfont
 from datetime import datetime
@@ -26,11 +25,9 @@ from typing import Callable, List, Literal, Optional, Tuple
 from move_me.utils.logger import get_logger
 
 
-# Font and color configuration - easily customizable
 class OverlayConfig:
     """Configuration class for overlay appearance."""
 
-    # Font configurations with fallbacks for better rendering
     FONT_FAMILIES = {
         "primary": ["Noto Sans", "Liberation Sans", "DejaVu Sans", "Ubuntu", "Arial"],
         "monospace": [
@@ -44,7 +41,6 @@ class OverlayConfig:
         "fallback": ["TkDefaultFont"],  # System fallback
     }
 
-    # Font sizes optimized for readability
     FONT_SIZES = {
         "title": 32,  # Main message
         "timer": 56,  # Timer display
@@ -52,7 +48,6 @@ class OverlayConfig:
         "warning": 12,  # Warning text
     }
 
-    # Color scheme - easily customizable
     COLORS = {
         "background": "#2c3e50",  # Dark blue-gray
         "text_primary": "#ecf0f1",  # Light gray-white
@@ -69,11 +64,11 @@ class OverlayConfig:
         font_type: str, size: int, weight: Literal["normal", "bold"] = "normal"
     ) -> Tuple[str, int, str]:
         """Get the best available font for the given type."""
+
         families = OverlayConfig.FONT_FAMILIES.get(
             font_type, OverlayConfig.FONT_FAMILIES["primary"]
         )
 
-        # Try each font family until we find one that works
         for family in families:
             try:
                 # Create a test font to verify it exists
@@ -119,19 +114,16 @@ class LinuxBreakOverlay:
         self.is_showing = True
         self.start_time = datetime.now()
 
-        # Run overlay in the main thread by creating a new thread for mainloop
-        self._overlay_thread = threading.Thread(
-            target=self._run_overlay_thread, daemon=True
-        )
-        self._overlay_thread.start()
+        # Run overlay in the current (main) thread. The caller is expected
+        # to be running an event loop or be prepared to block while the
+        # overlay mainloop runs. We use tkinter's after() to poll the
+        # _should_quit flag so hide_overlay() can request a graceful exit.
+        self._should_quit = False
+        self._run_overlay()
 
-    def _run_overlay_thread(self):
+    def _run_overlay(self):
         """Run the overlay in a separate thread with its own Tk instance."""
         try:
-            # Initialize quit flag
-            self._should_quit = False
-
-            # Create a new Tk instance for this thread
             root = tk.Tk()
             root.title("Move Me - Break Time")
             root.configure(bg=self.config.COLORS["background"])
@@ -188,16 +180,19 @@ class LinuxBreakOverlay:
             # Populate the overlay
             self._populate_overlay_in_thread(root)
 
-            # Start periodic check for quit signal
+            # Start periodic check for quit signal using after()
             def check_quit():
                 if self._should_quit:
-                    root.quit()
+                    try:
+                        root.quit()
+                    except Exception:
+                        pass
                 else:
                     root.after(100, check_quit)  # Check every 100ms
 
             root.after(100, check_quit)
 
-            # Start the mainloop
+            # Start the mainloop (blocks until window is destroyed or quit())
             root.mainloop()
 
         except Exception as e:
@@ -329,8 +324,8 @@ class LinuxBreakOverlay:
 
         # Only hide the overlay if the override was successful
         if override_successful:
-            self.is_showing = False
-            # Set flag to quit the overlay gracefully
+            # Request the overlay to quit gracefully
+            # Note: is_showing will be set to False in the finally block of _run_overlay
             self._should_quit = True
         else:
             # Override failed - keep overlay active
@@ -344,19 +339,23 @@ class LinuxBreakOverlay:
         time_remaining = self._get_time_remaining()
 
         if time_remaining <= 0:
-            # Break time is over
+            # Break time is over - automatically close overlay
             self.timer_label.config(text="00:00")
             self.timer_label.config(fg=self.config.COLORS["timer_complete"])
 
             # Update message to indicate break is complete
             if self.message_label:
                 self.message_label.config(
-                    text="Break time complete! You may override or wait for automatic closure."
+                    text="Break time complete! Closing overlay..."
                 )
 
-            # Continue scheduling updates to keep the display responsive
+            # Auto-close the overlay after showing completion message briefly
             if hasattr(self, "_thread_root") and self._thread_root:
-                self._thread_root.after(1000, self._update_timer_in_thread)
+                # Show completion message for 2 seconds, then auto-close
+                def auto_close():
+                    self._should_quit = True
+
+                self._thread_root.after(1000, auto_close)  # Auto-close after 1 second
             return
 
         # Update timer display
@@ -386,14 +385,15 @@ class LinuxBreakOverlay:
             return
 
         self.is_showing = False
-
-        # Simply wait for the thread to finish naturally
-        if hasattr(self, "_overlay_thread") and self._overlay_thread.is_alive():
-            try:
-                # Set a flag to stop the overlay gracefully
-                self._should_quit = True
-            except Exception:
-                pass
+        # Request the overlay to quit gracefully. The after()-driven check
+        # in the mainloop will call root.quit() which ends the mainloop.
+        try:
+            self._should_quit = True
+        except AttributeError:
+            # _should_quit might not exist if overlay was never shown
+            self.logger.debug("_should_quit attribute not found during hide_overlay")
+        except Exception as e:
+            self.logger.error(f"Error setting _should_quit flag: {e}")
 
     def _get_time_remaining(self) -> int:
         """Get remaining time in seconds."""

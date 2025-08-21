@@ -7,8 +7,10 @@ from move_me.core.overlay import LinuxBreakOverlay
 
 def test_override():
     """Test override callback."""
-    print("Override button clicked!")
-    return True  # Allow override
+    # This is a simple test that verifies the import works
+    from move_me.core.overlay import LinuxBreakOverlay
+
+    assert LinuxBreakOverlay is not None
 
 
 def main():

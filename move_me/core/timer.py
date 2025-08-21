@@ -117,9 +117,20 @@ class TimerManager:
             self._current_task.cancel()
             self._current_task = None
 
-        # If in break, end it
+        # If in break, end it (this will clean up overlay)
         if self._in_break:
             self._end_break()
+        else:
+            # Clean up overlay if it exists but we're not in break
+            # (could happen if overlay is stuck)
+            if self.overlay:
+                try:
+                    if self.overlay.is_active():
+                        self.overlay.hide_overlay()
+                except Exception as e:
+                    self.logger.error(f"Error cleaning up overlay on stop: {e}")
+                finally:
+                    self.overlay = None
 
     def pause(self):
         """Pause the timer (only when not in break)."""
@@ -276,9 +287,12 @@ class TimerManager:
         try:
             if self.overlay and self.overlay.is_active():
                 self.overlay.hide_overlay()
-                self.overlay = None
+            # Always clear the overlay reference after hiding
+            self.overlay = None
         except Exception as e:
             self.logger.error(f"Error hiding overlay at break end: {e}")
+            # Ensure overlay reference is cleared even on error
+            self.overlay = None
 
         # Schedule next break
         self._schedule_next_break()
@@ -335,9 +349,12 @@ class TimerManager:
                 try:
                     if self.overlay and self.overlay.is_active():
                         self.overlay.hide_overlay()
-                        self.overlay = None
+                    # Always clear the overlay reference after hiding
+                    self.overlay = None
                 except Exception as e:
                     self.logger.error(f"Error hiding overlay after override: {e}")
+                    # Ensure overlay reference is cleared even on error
+                    self.overlay = None
 
                 self._end_break()
 
