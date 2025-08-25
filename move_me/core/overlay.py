@@ -120,7 +120,10 @@ class LinuxBreakOverlay:
 
         # Avoid Tcl/Tk errors in headless environments by checking common
         # display environment variables used by X11 and Wayland.
-        if not any(key in os.environ for key in ("DISPLAY", "WAYLAND_DISPLAY", "XDG_RUNTIME_DIR")):
+        if not any(
+            key in os.environ
+            for key in ("DISPLAY", "WAYLAND_DISPLAY", "XDG_RUNTIME_DIR")
+        ):
             self.logger.error("No graphical display detected; cannot show overlay")
             return
 
