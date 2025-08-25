@@ -88,9 +88,9 @@ class StateManager:
 
     def use_override(self) -> bool:
         """Use one override if available."""
-        if not self.can_use_override(999):  # Check without limit first
-            return False
-
+        # Default to allowing override using the stored state; the caller
+        # should validate against configured daily limits. Here we simply
+        # increment the counter and persist state.
         self._state["overrides_used_today"] += 1
         self._state["total_overrides"] += 1
         self.save_state()
