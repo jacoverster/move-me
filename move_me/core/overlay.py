@@ -17,6 +17,7 @@ Color and Design Improvements:
 """
 
 import random
+import os
 import tkinter as tk
 import tkinter.font as tkfont
 from datetime import datetime
@@ -107,17 +108,28 @@ class LinuxBreakOverlay:
         self.override_button: Optional[tk.Button] = None
 
     def show_overlay(self):
-        """Show the break overlay using singleton pattern for Tk instance."""
+        """Show the break overlay using a Tk root in the calling thread.
+
+        This method blocks until the overlay is closed. If no graphical
+        display is detected (commonly in headless CI), the method logs and
+        returns without raising exceptions.
+        """
+
         if self.is_showing:
             return
 
+        # Avoid Tcl/Tk errors in headless environments by checking common
+        # display environment variables used by X11 and Wayland.
+        if not any(key in os.environ for key in ("DISPLAY", "WAYLAND_DISPLAY", "XDG_RUNTIME_DIR")):
+            self.logger.error("No graphical display detected; cannot show overlay")
+            return
+
+        # Mark as showing and record start time
         self.is_showing = True
         self.start_time = datetime.now()
 
-        # Run overlay in the current (main) thread. The caller is expected
-        # to be running an event loop or be prepared to block while the
-        # overlay mainloop runs. We use tkinter's after() to poll the
-        # _should_quit flag so hide_overlay() can request a graceful exit.
+        # Run overlay in the current thread. Tkinter is not thread-safe so the
+        # Tk root must be created and run in the main/calling thread.
         self._should_quit = False
         self._run_overlay()
 
