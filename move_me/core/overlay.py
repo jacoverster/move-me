@@ -16,8 +16,8 @@ Color and Design Improvements:
 - Consistent color usage throughout interface
 """
 
-import random
 import os
+import random
 import tkinter as tk
 import tkinter.font as tkfont
 from datetime import datetime
@@ -101,11 +101,13 @@ class LinuxBreakOverlay:
 
         self.is_showing = False
         self.start_time: Optional[datetime] = None
+        self._resume_button_shown = False
 
         # UI elements
         self.message_label: Optional[tk.Label] = None
         self.timer_label: Optional[tk.Label] = None
         self.override_button: Optional[tk.Button] = None
+        self.resume_button: Optional[tk.Button] = None
 
     def show_overlay(self):
         """Show the break overlay using a Tk root in the calling thread.
@@ -130,6 +132,7 @@ class LinuxBreakOverlay:
         # Mark as showing and record start time
         self.is_showing = True
         self.start_time = datetime.now()
+        self._resume_button_shown = False
 
         # Run overlay in the current thread. Tkinter is not thread-safe so the
         # Tk root must be created and run in the main/calling thread.
@@ -354,23 +357,24 @@ class LinuxBreakOverlay:
         time_remaining = self._get_time_remaining()
 
         if time_remaining <= 0:
-            # Break time is over - automatically close overlay
+            # Break time is over - show resume button and wait for user
             self.timer_label.config(text="00:00")
             self.timer_label.config(fg=self.config.COLORS["timer_complete"])
 
             # Update message to indicate break is complete
             if self.message_label:
                 self.message_label.config(
-                    text="Break time complete! Closing overlay..."
+                    text="Break complete! Click the button below to resume work."
                 )
 
-            # Auto-close the overlay after showing completion message briefly
-            if hasattr(self, "_thread_root") and self._thread_root:
-                # Show completion message for 2 seconds, then auto-close
-                def auto_close():
-                    self._should_quit = True
+            # Hide the override button and show the resume button
+            if self.override_button:
+                self.override_button.pack_forget()
 
-                self._thread_root.after(1000, auto_close)  # Auto-close after 1 second
+            # Show the resume button if not already shown
+            if not self._resume_button_shown:
+                self._resume_button_shown = True
+                self._show_resume_button()
             return
 
         # Update timer display
@@ -379,6 +383,41 @@ class LinuxBreakOverlay:
         # Schedule next update
         if hasattr(self, "_thread_root") and self._thread_root:
             self._thread_root.after(1000, self._update_timer_in_thread)
+
+    def _show_resume_button(self):
+        """Show the resume button after break is complete."""
+        if not hasattr(self, "_thread_root") or not self._thread_root:
+            return
+
+        # Find the center frame (parent of message_label)
+        center_frame = self.message_label.master if self.message_label else None
+        if not center_frame:
+            return
+
+        # Create the resume button with a distinct green color
+        self.resume_button = tk.Button(
+            center_frame,
+            text="Resume Work",
+            font=self.button_font_obj,
+            bg=self.config.COLORS["timer_complete"],  # Green color
+            fg=self.config.COLORS["button_text"],
+            activebackground="#1e8449",  # Darker green on hover
+            activeforeground=self.config.COLORS["button_text"],
+            padx=40,
+            pady=20,
+            command=self._handle_resume,
+            cursor="hand2",
+            relief="flat",
+            borderwidth=0,
+            bd=0,
+            highlightthickness=0,
+        )
+        self.resume_button.pack(pady=40)
+
+    def _handle_resume(self):
+        """Handle resume button click after break is complete."""
+        self.logger.info("User clicked resume button after break")
+        self._should_quit = True
 
     def _block_input(self, event):
         """Block keyboard and mouse input."""
