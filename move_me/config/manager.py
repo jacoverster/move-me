@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 from typing import Any, Dict, Optional
+
 import yaml
 
 
@@ -31,16 +32,12 @@ class ConfigManager:
                 "notification_sound": True,
                 "log_level": "INFO",
                 "auto_start": False,
+                "auto_lock_enabled": True,
                 "state_file": "move_me_state.json",
                 "overlay_messages": [
-                    "Time to take a break! Your eyes and body need rest.",
-                    "Step away from the screen. Move around, stretch, and relax.",
-                    "A short break now will help you stay productive longer.",
-                    "Remember: regular breaks prevent strain and boost creativity.",
-                    "Stand up, walk around, and give your mind a moment to refresh.",
-                    "Your health is more important than any deadline.",
-                    "Taking breaks is not lazy - it's essential for your wellbeing.",
-                    "Look at something far away, blink often, and breathe deeply.",
+                    "Superset A: \nHeavy: 6-12 Pull-ups + 15-30 ATG Split Squats, \nLight: 6-12 Pull-ups + 8-20 Wall-assisted Sissy Squats",
+                    "Superset B: \nHeavy: 6-12 Parallel Bar Leg-Assisted Dips + 8-20 Box Leg Curls, \nLight: 6-12 Parallel Bar Leg-Assisted Dips + 8-20 Wall-assisted Sissy Squats",
+                    "Superset C: \nHeavy: 8-15 Inverted Ring Rows + 8-15 Push-ups, \nLight: 8-15 Inverted Ring Rows + 8-20 Wall-assisted Sissy Squats",
                 ],
             }
 

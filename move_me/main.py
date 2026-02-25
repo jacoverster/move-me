@@ -4,15 +4,13 @@ import asyncio
 import signal
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Annotated, Optional
 
 import typer
-from typing_extensions import Annotated
 
 from move_me.config.manager import ConfigManager
 from move_me.core.timer import TimerManager
-from move_me.utils.logger import setup_logging, get_logger
-
+from move_me.utils.logger import get_logger, setup_logging
 
 app = typer.Typer(help="Move Me - Automated screen locking tool for regular breaks")
 
